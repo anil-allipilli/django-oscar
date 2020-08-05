@@ -5,7 +5,7 @@ __pycache__
 /dist/
 /build/
 /node_modules/
-
+/env/
 # venv
 /bin/
 /lib/
@@ -57,3 +57,4 @@ settings_local.py
 /sandbox/public/
 /sandbox/whoosh_index/
 /sandbox/logs/
+*.*
