@@ -32,7 +32,7 @@ GENERIC_STATS_KEYS = (
     'order_status_breakdown',
 )
 STAFF_STATS_KEYS = (
-    'total_site_offers',
+    'offer_maps',
     'total_vouchers',
 )
 
@@ -83,6 +83,14 @@ class TestDashboardIndexForStaffUser(WebTestCase):
         response = self.get(reverse('dashboard:index'))
         for key in GENERIC_STATS_KEYS + STAFF_STATS_KEYS:
             self.assertInContext(response, key)
+
+    def test_login_redirects_to_dashboard_index(self):
+        page = self.get(reverse('dashboard:login'))
+        form = page.forms['dashboard_login_form']
+        form['username'] = self.email
+        form['password'] = self.password
+        response = form.submit('login_submit')
+        self.assertRedirectsTo(response, 'dashboard:index')
 
 
 class TestDashboardIndexForPartnerUser(WebTestCase):

@@ -4,8 +4,11 @@ from decimal import ROUND_UP
 from decimal import Decimal as D
 
 from django.contrib import messages
+from django.contrib.auth import views as auth_views
+from django.contrib.auth.forms import AuthenticationForm
 from django.db.models import Avg, Count, Sum
 from django.template.response import TemplateResponse
+from django.urls import reverse_lazy
 from django.utils.timezone import now
 from django.views.generic import TemplateView
 
@@ -42,15 +45,6 @@ class IndexView(TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx.update(self.get_stats())
         return ctx
-
-    def get_active_site_offers(self):
-        """
-        Return active conditional offers of type "site offer". The returned
-        ``Queryset`` of site offers is filtered by end date greater then
-        the current date.
-        """
-        return ConditionalOffer.objects.filter(
-            end_datetime__gt=now(), offer_type=ConditionalOffer.SITE)
 
     def get_active_vouchers(self):
         """
@@ -185,7 +179,10 @@ class IndexView(TemplateView):
         }
         if user.is_staff:
             stats.update(
-                total_site_offers=self.get_active_site_offers().count(),
+                offer_maps=(ConditionalOffer.objects.filter(end_datetime__gt=now())
+                                                    .values('offer_type')
+                                                    .annotate(count=Count('id'))
+                                                    .order_by('offer_type')),
                 total_vouchers=self.get_active_vouchers().count(),
             )
         return stats
@@ -308,3 +305,13 @@ class PopUpWindowDeleteMixin(PopUpWindowMixin):
             )
         else:
             return response
+
+
+class LoginView(auth_views.LoginView):
+    template_name = 'oscar/dashboard/login.html'
+    authentication_form = AuthenticationForm
+    login_redirect_url = reverse_lazy('dashboard:index')
+
+    def get_success_url(self):
+        url = self.get_redirect_url()
+        return url or self.login_redirect_url

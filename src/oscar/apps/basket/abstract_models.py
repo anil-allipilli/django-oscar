@@ -1,5 +1,6 @@
 import zlib
 from decimal import Decimal as D
+from operator import itemgetter
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
@@ -367,6 +368,7 @@ class AbstractBasket(models.Model):
             return base
         repr_options = [{'option': repr(option['option']),
                          'value': repr(option['value'])} for option in options]
+        repr_options.sort(key=itemgetter('option'))
         return "%s_%s" % (base, zlib.crc32(repr(repr_options).encode('utf8')))
 
     def _get_total(self, property):
@@ -714,7 +716,7 @@ class AbstractLine(models.Model):
 
         Consumed items are no longer available to be used in offers.
         """
-        self.consumer.consume(quantity, offer=offer)
+        return self.consumer.consume(quantity, offer=offer)
 
     def get_price_breakdown(self):
         """
@@ -772,6 +774,9 @@ class AbstractLine(models.Model):
     def is_available_for_offer_discount(self, offer):
         return self.consumer.available(offer) > 0
 
+    def quantity_available_for_offer(self, offer):
+        return self.quantity_without_offer_discount(offer) + self.quantity_with_offer_discount(offer)
+
     # ==========
     # Properties
     # ==========
@@ -787,11 +792,6 @@ class AbstractLine(models.Model):
     @property
     def quantity_without_discount(self):
         return self.consumer.available()
-
-    @property
-    def is_available_for_discount(self):
-        # deprecated
-        return self.consumer.available() > 0
 
     @property
     def discount_value(self):
@@ -903,8 +903,8 @@ class AbstractLine(models.Model):
         if current_price_incl_tax != self.price_incl_tax:
             product_prices = {
                 'product': self.product.get_title(),
-                'old_price': currency(self.price_incl_tax),
-                'new_price': currency(current_price_incl_tax)
+                'old_price': currency(self.price_incl_tax, self.price_currency),
+                'new_price': currency(current_price_incl_tax, self.price_currency)
             }
             if current_price_incl_tax > self.price_incl_tax:
                 warning = _("The price of '%(product)s' has increased from"

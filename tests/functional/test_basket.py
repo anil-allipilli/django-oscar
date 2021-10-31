@@ -3,8 +3,10 @@ from decimal import Decimal as D
 from http import client as http_client
 from http.cookies import _unquote
 
-from django.conf import settings
-from django.test import TestCase
+import django
+from django.contrib.messages.storage import cookie
+from django.core import signing
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.translation import gettext
 
@@ -64,7 +66,7 @@ class AnonAddToBasketViewTests(WebTestCase):
         basket = Basket.objects.get(id=basket_id)
         line = basket.lines.get(product=self.product)
         stockrecord = self.product.stockrecords.all()[0]
-        self.assertEqual(stockrecord.price_excl_tax, line.price_excl_tax)
+        self.assertEqual(stockrecord.price, line.price_excl_tax)
 
 
 class BasketSummaryViewTests(WebTestCase):
@@ -93,13 +95,7 @@ class BasketSummaryViewTests(WebTestCase):
 class BasketThresholdTest(WebTestCase):
     csrf_checks = False
 
-    def setUp(self):
-        self._old_threshold = settings.OSCAR_MAX_BASKET_QUANTITY_THRESHOLD
-        settings.OSCAR_MAX_BASKET_QUANTITY_THRESHOLD = 3
-
-    def tearDown(self):
-        settings.OSCAR_MAX_BASKET_QUANTITY_THRESHOLD = self._old_threshold
-
+    @override_settings(OSCAR_MAX_BASKET_QUANTITY_THRESHOLD=3)
     def test_adding_more_than_threshold_raises(self):
         dummy_product = create_product(price=D('10.00'), num_in_stock=10)
         url = reverse('basket:add', kwargs={'pk': dummy_product.pk})
@@ -107,18 +103,25 @@ class BasketThresholdTest(WebTestCase):
                        'action': 'add',
                        'quantity': 2}
         response = self.app.post(url, params=post_params)
-        self.assertTrue('oscar_open_basket' in response.test_app.cookies)
+        self.assertIn('oscar_open_basket', response.test_app.cookies)
         post_params = {'product_id': dummy_product.id,
                        'action': 'add',
                        'quantity': 2}
         response = self.app.post(url, params=post_params)
-
         expected = gettext(
             "Due to technical limitations we are not able to ship more "
             "than %(threshold)d items in one order. Your basket currently "
             "has %(basket)d items."
         ) % ({'threshold': 3, 'basket': 2})
-        self.assertTrue(expected in response.test_app.cookies['messages'])
+        if django.VERSION < (3, 2):
+            self.assertIn(expected, response.test_app.cookies['messages'])
+        else:
+            signer = signing.get_cookie_signer(salt='django.contrib.messages')
+            message_strings = [
+                m.message for m in signer.unsign_object(response.test_app.cookies['messages'],
+                                                        serializer=cookie.MessageSerializer)
+            ]
+            self.assertIn(expected, message_strings)
 
 
 class BasketReportTests(TestCase):

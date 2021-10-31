@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-class PartnerFactory(factory.DjangoModelFactory):
+class PartnerFactory(factory.django.DjangoModelFactory):
     name = "Gardners"
 
     class Meta:
@@ -25,11 +25,11 @@ class PartnerFactory(factory.DjangoModelFactory):
                 self.users.add(user)
 
 
-class StockRecordFactory(factory.DjangoModelFactory):
+class StockRecordFactory(factory.django.DjangoModelFactory):
     partner = factory.SubFactory(PartnerFactory)
     partner_sku = factory.Sequence(lambda n: 'unit%d' % n)
     price_currency = "GBP"
-    price_excl_tax = D('9.99')
+    price = D('9.99')
     num_in_stock = 100
 
     class Meta:

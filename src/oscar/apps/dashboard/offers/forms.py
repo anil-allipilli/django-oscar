@@ -1,6 +1,6 @@
-import datetime
-
 from django import forms
+from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from oscar.core.loading import get_model
@@ -11,10 +11,26 @@ Condition = get_model('offer', 'Condition')
 Benefit = get_model('offer', 'Benefit')
 
 
+def get_offer_type_choices():
+    return (("", "---------"),) + tuple(choice for choice in ConditionalOffer.TYPE_CHOICES
+                                        if choice[0] in [getattr(ConditionalOffer, const_name)
+                                                         for const_name in settings.OSCAR_OFFERS_IMPLEMENTED_TYPES])
+
+
 class MetaDataForm(forms.ModelForm):
+
+    offer_type = forms.ChoiceField(label=_("Type"), choices=get_offer_type_choices)
+
     class Meta:
         model = ConditionalOffer
-        fields = ('name', 'description',)
+        fields = ('name', 'description', 'offer_type')
+
+    def clean_offer_type(self):
+        data = self.cleaned_data['offer_type']
+        if (self.instance.pk is not None) and (self.instance.offer_type == ConditionalOffer.VOUCHER) and \
+           ('offer_type' in self.changed_data) and self.instance.vouchers.exists():
+            raise forms.ValidationError(_("This can only be changed if it has no vouchers attached to it"))
+        return data
 
 
 class RestrictionsForm(forms.ModelForm):
@@ -28,15 +44,14 @@ class RestrictionsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        today = datetime.date.today()
-        self.fields['start_datetime'].initial = today
+        self.fields['start_datetime'].initial = timezone.now()
 
     class Meta:
         model = ConditionalOffer
         fields = ('start_datetime', 'end_datetime',
                   'max_basket_applications', 'max_user_applications',
                   'max_global_applications', 'max_discount',
-                  'priority', 'exclusive')
+                  'priority', 'exclusive', 'combinations')
 
     def clean(self):
         cleaned_data = super().clean()
@@ -45,7 +60,34 @@ class RestrictionsForm(forms.ModelForm):
         if start and end and end < start:
             raise forms.ValidationError(_(
                 "The end date must be after the start date"))
+        exclusive = cleaned_data['exclusive']
+        combinations = cleaned_data['combinations']
+        if exclusive and combinations:
+            raise forms.ValidationError(_('Exclusive offers cannot be combined'))
         return cleaned_data
+
+    def save(self, *args, **kwargs):
+        """Store the offer combinations.
+
+        Also, and make sure the combinations are stored on the combine-able
+        offers as well.
+        """
+        instance = super().save(*args, **kwargs)
+        if instance.id:
+            instance.combinations.clear()
+            for offer in self.cleaned_data['combinations']:
+                if offer != instance:
+                    instance.combinations.add(offer)
+
+            combined_offers = instance.combined_offers
+            for offer in combined_offers:
+                if offer == instance:
+                    continue
+                for otheroffer in combined_offers:
+                    if offer == otheroffer:
+                        continue
+                    offer.combinations.add(otheroffer)
+        return instance
 
 
 class ConditionForm(forms.ModelForm):
@@ -161,4 +203,16 @@ class BenefitForm(forms.ModelForm):
 
 class OfferSearchForm(forms.Form):
     name = forms.CharField(required=False, label=_("Offer name"))
-    is_active = forms.BooleanField(required=False, label=_("Is active?"))
+    is_active = forms.NullBooleanField(required=False, label=_("Is active?"), widget=widgets.NullBooleanSelect)
+    offer_type = forms.ChoiceField(required=False, label=_("Offer type"), choices=get_offer_type_choices)
+    has_vouchers = forms.NullBooleanField(required=False, label=_("Has vouchers?"), widget=widgets.NullBooleanSelect)
+    voucher_code = forms.CharField(required=False, label=_("Voucher code"))
+
+    basic_fields = [
+        'name',
+        'is_active',
+    ]
+
+    @property
+    def is_voucher_offer_type(self):
+        return self.is_bound and (self.cleaned_data['offer_type'] == ConditionalOffer.VOUCHER)

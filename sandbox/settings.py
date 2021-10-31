@@ -38,8 +38,6 @@ CACHES = {
 # although not all choices may be available on all operating systems.
 # On Unix systems, a value of None will cause Django to use the same
 # timezone as the operating system.
-# If running in a Windows environment this must be set to the same as your
-# system time zone.
 USE_TZ = True
 TIME_ZONE = 'Europe/London'
 
@@ -105,6 +103,10 @@ STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 )
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/dev/ref/settings/#default-auto-field
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = env.str('SECRET_KEY', default='UajFCuyjDKmWHe29neauXzHi9eZoRXr6RMbT5JyAdPiACBP6Cra2')
@@ -342,14 +344,16 @@ HAYSTACK_CONNECTIONS = {
         'PATH': location('whoosh_index'),
     },
 }
-# Here's a sample Haystack config if using Solr (which is recommended)
-#HAYSTACK_CONNECTIONS = {
-#    'default': {
-#        'ENGINE': 'haystack.backends.solr_backend.SolrEngine',
-#        'URL': 'http://127.0.0.1:8983/solr/oscar_latest/',
-#        'INCLUDE_SPELLING': True
-#    },
-#}
+
+# Here's a sample Haystack config for Solr 6.x (which is recommended)
+# HAYSTACK_CONNECTIONS = {
+#     'default': {
+#         'ENGINE': 'haystack.backends.solr_backend.SolrEngine',
+#         'URL': 'http://127.0.0.1:8983/solr/sandbox',
+#         'ADMIN_URL': 'http://127.0.0.1:8983/solr/admin/cores',
+#         'INCLUDE_SPELLING': True,
+#     }
+# }
 
 # =============
 # Debug Toolbar
@@ -396,14 +400,6 @@ OSCAR_ORDER_STATUS_CASCADE = {
     'Cancelled': 'Cancelled',
     'Complete': 'Shipped',
 }
-
-# LESS/CSS
-# ========
-
-# We default to using CSS files, rather than the LESS files that generate them.
-# If you want to develop Oscar's CSS, then set OSCAR_USE_LESS=True to enable the
-# on-the-fly less processor.
-OSCAR_USE_LESS = False
 
 # Sorl
 # ====

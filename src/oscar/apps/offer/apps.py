@@ -1,4 +1,4 @@
-from django.conf.urls import url
+from django.urls import path
 from django.utils.translation import gettext_lazy as _
 
 from oscar.core.application import OscarConfig
@@ -13,15 +13,14 @@ class OfferConfig(OscarConfig):
     namespace = 'offer'
 
     def ready(self):
-        from . import signals  # noqa
+        from . import receivers  # noqa
 
         self.detail_view = get_class('offer.views', 'OfferDetailView')
         self.list_view = get_class('offer.views', 'OfferListView')
 
     def get_urls(self):
         urls = [
-            url(r'^$', self.list_view.as_view(), name='list'),
-            url(r'^(?P<slug>[\w-]+)/$', self.detail_view.as_view(),
-                name='detail'),
+            path('', self.list_view.as_view(), name='list'),
+            path('<slug:slug>/', self.detail_view.as_view(), name='detail'),
         ]
         return self.post_process_urls(urls)

@@ -1,5 +1,4 @@
 import logging
-from collections import OrderedDict
 from decimal import Decimal as D
 
 from django.conf import settings
@@ -166,20 +165,16 @@ class AbstractOrder(models.Model):
         """
         Return basket total including tax but before discounts are applied
         """
-        total = D('0.00')
-        for line in self.lines.all():
-            total += line.line_price_before_discounts_incl_tax
-        return total
+        result = self.lines.aggregate(total=Sum('line_price_before_discounts_incl_tax'))
+        return result['total']
 
     @property
     def basket_total_before_discounts_excl_tax(self):
         """
         Return basket total excluding tax but before discounts are applied
         """
-        total = D('0.00')
-        for line in self.lines.all():
-            total += line.line_price_before_discounts_excl_tax
-        return total
+        result = self.lines.aggregate(total=Sum('line_price_before_discounts_excl_tax'))
+        return result['total']
 
     @property
     def basket_total_incl_tax(self):
@@ -264,7 +259,7 @@ class AbstractOrder(models.Model):
             return ''
 
         # Collect all events by event-type
-        event_map = OrderedDict()
+        event_map = {}
         for event in events:
             event_name = event.event_type.name
             if event_name not in event_map:
@@ -401,6 +396,7 @@ class AbstractOrderNote(models.Model):
     class Meta:
         abstract = True
         app_label = 'order'
+        ordering = ['-date_updated']
         verbose_name = _("Order Note")
         verbose_name_plural = _("Order Notes")
 
@@ -433,9 +429,8 @@ class AbstractOrderStatusChange(models.Model):
         ordering = ['-date_created']
 
     def __str__(self):
-        return _('{order} has changed status from {old_status} to {new_status}').format(
-            order=self.order, old_status=self.old_status, new_status=self.new_status
-        )
+        return _("%(order)s has changed status from %(old_status)s to %(new_status)s") \
+            % {'order': self.order, 'old_status': self.old_status, 'new_status': self.new_status, }
 
 
 class AbstractCommunicationEvent(models.Model):
@@ -529,10 +524,8 @@ class AbstractLine(models.Model):
 
     # Price information (these fields are actually redundant as the information
     # can be calculated from the LinePrice models
-    # Deprecated - will be removed in Oscar 2.1
     line_price_incl_tax = models.DecimalField(
         _("Price (inc. tax)"), decimal_places=2, max_digits=12)
-    # Deprecated - will be removed in Oscar 2.1
     line_price_excl_tax = models.DecimalField(
         _("Price (excl. tax)"), decimal_places=2, max_digits=12)
 
@@ -544,10 +537,6 @@ class AbstractLine(models.Model):
         _("Price before discounts (excl. tax)"),
         decimal_places=2, max_digits=12)
 
-    # Deprecated - will be removed in Oscar 2.1
-    unit_cost_price = models.DecimalField(
-        _("Unit Cost Price"), decimal_places=2, max_digits=12, blank=True,
-        null=True)
     # Normal site price for item (without discounts)
     unit_price_incl_tax = models.DecimalField(
         _("Unit Price (inc. tax)"), decimal_places=2, max_digits=12,
@@ -555,18 +544,10 @@ class AbstractLine(models.Model):
     unit_price_excl_tax = models.DecimalField(
         _("Unit Price (excl. tax)"), decimal_places=2, max_digits=12,
         blank=True, null=True)
-    # Deprecated - will be removed in Oscar 2.1
-    unit_retail_price = models.DecimalField(
-        _("Unit Retail Price"), decimal_places=2, max_digits=12,
-        blank=True, null=True)
 
     # Partners often want to assign some status to each line to help with their
     # own business processes.
     status = models.CharField(_("Status"), max_length=255, blank=True)
-
-    # Deprecated - will be removed in Oscar 2.1
-    est_dispatch_date = models.DateField(
-        _("Estimated Dispatch Date"), blank=True, null=True)
 
     #: Order status pipeline.  This should be a dict where each (key, value)
     #: corresponds to a status and the possible statuses that can follow that
@@ -737,7 +718,7 @@ class AbstractLine(models.Model):
         """
         Returns a dict of shipping events that this line has been through
         """
-        status_map = OrderedDict()
+        status_map = {}
         for event in self.shipping_events.all():
             event_type = event.event_type
             event_name = event_type.name
@@ -1137,6 +1118,7 @@ class AbstractOrderDiscount(models.Model):
     class Meta:
         abstract = True
         app_label = 'order'
+        ordering = ['pk']
         verbose_name = _("Order Discount")
         verbose_name_plural = _("Order Discounts")
 

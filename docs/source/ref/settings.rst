@@ -99,13 +99,12 @@ sorting, filtering, etc.
 The default is::
 
     OSCAR_SEARCH_FACETS = {
-        'fields': OrderedDict([
-            ('product_class', {'name': _('Type'), 'field': 'product_class'}),
-            ('rating', {'name': _('Rating'), 'field': 'rating'}),
-        ]),
-        'queries': OrderedDict([
-            ('price_range',
-             {
+        'fields': {
+            'product_class': {'name': _('Type'), 'field': 'product_class'},
+            'rating': {'name': _('Rating'), 'field': 'rating'},
+        },
+        'queries': {
+            'price_range': {
                  'name': _('Price range'),
                  'field': 'price',
                  'queries': [
@@ -116,8 +115,8 @@ The default is::
                      (_('40 to 60'), '[40 TO 60]'),
                      (_('60+'), '[60 TO *]'),
                  ]
-             }),
-        ]),
+             },
+        },
     }
 
 ``OSCAR_PRODUCT_SEARCH_HANDLER``
@@ -312,6 +311,7 @@ A dotted path to a function responsible for rounding decimal amounts
 when offer discount calculations don't lead to legitimate currency values.
 
 ``OSCAR_OFFERS_INCL_TAX``
+-------------------------
 
 Default: ``False``
 
@@ -322,6 +322,22 @@ absolute prices in offers. So a flat discount of 10 pounds in an offer will
 be treated as 10 pounds before taxes if ``OSCAR_OFFERS_INCL_TAX`` remains
 ``False`` and 10 pounds after taxes if ``OSCAR_OFFERS_INCL_TAX`` is set to
 ``True``.
+
+``OSCAR_OFFERS_IMPLEMENTED_TYPES``
+----------------------------------
+
+Default::
+
+    [
+        'SITE',
+        'VOUCHER',
+    ]
+
+A list of values from among those in the ``offer.ConditionalOffer.TYPE_CHOICES``
+model attribute. The names of the model constants are used, instead of the
+values themselves. This setting is used to restrict the selectable offer types
+in the dashboard offers forms (``MetaDataForm`` and ``OfferSearchForm``), to
+ones that Oscar currently implements.
 
 Basket settings
 ===============
@@ -522,12 +538,6 @@ Which cookies to delete automatically when the user logs out.
 Tracking ID for Google Analytics tracking code, available as `google_analytics_id` in the template
 context. If setting is set, enables Universal Analytics tracking code for page views and
 transactions.
-
-
-``OSCAR_USE_LESS``
-------------------
-
-Allows to use raw LESS styles directly. Refer to :ref:`less-css` document for more details.
 
 
 ``OSCAR_CSV_INCLUDE_BOM``

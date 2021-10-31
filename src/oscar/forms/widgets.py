@@ -6,6 +6,7 @@ from django.forms.models import ModelChoiceIterator
 from django.forms.widgets import FileInput
 from django.utils import formats
 from django.utils.encoding import force_str
+from django.utils.translation import gettext as _
 
 
 class ImageInput(FileInput):
@@ -65,9 +66,9 @@ def datetime_format_to_js_time_format(format):
         pass
     converted = format
     replacements = {
-        '%H': 'hh',
-        '%I': 'HH',
-        '%M': 'ii',
+        '%H': 'HH',
+        '%I': 'hh',
+        '%M': 'mm',
         '%S': 'ss',
     }
     for search, replace in replacements.items():
@@ -78,17 +79,17 @@ def datetime_format_to_js_time_format(format):
 def datetime_format_to_js_datetime_format(format):
     """
     Convert a Python datetime format to a time format suitable for use with
-    the datetime picker we use, http://www.malot.fr/bootstrap-datetimepicker/.
+    the datetime picker we use, http://momentjs.com/docs/#/displaying/format/.
     """
     converted = format
     replacements = {
-        '%Y': 'yyyy',
-        '%y': 'yy',
-        '%m': 'mm',
-        '%d': 'dd',
-        '%H': 'hh',
-        '%I': 'HH',
-        '%M': 'ii',
+        '%Y': 'YYYY',
+        '%y': 'YY',
+        '%m': 'MM',
+        '%d': 'DD',
+        '%H': 'HH',
+        '%I': 'hh',
+        '%M': 'mm',
         '%S': 'ss',
     }
     for search, replace in replacements.items():
@@ -147,7 +148,7 @@ class TimePickerInput(DateTimeWidgetMixin, forms.TimeInput):
             'data-oscarWidget': 'time',
             'data-timeFormat': datetime_format_to_js_time_format(self.get_format()),
         }
-        ctx['icon_classes'] = 'icon-time glyphicon-time'
+        ctx['icon_classes'] = 'far fa-clock'
         return ctx
 
 
@@ -164,7 +165,7 @@ class DatePickerInput(DateTimeWidgetMixin, forms.DateInput):
             'data-oscarWidget': 'date',
             'data-dateFormat': datetime_format_to_js_date_format(self.get_format()),
         }
-        ctx['icon_classes'] = 'icon-calendar glyphicon-calendar'
+        ctx['icon_classes'] = 'far fa-calendar-alt'
         return ctx
 
 
@@ -195,7 +196,7 @@ class DateTimePickerInput(DateTimeWidgetMixin, forms.DateTimeInput):
             'data-oscarWidget': 'datetime',
             'data-datetimeFormat': datetime_format_to_js_datetime_format(self.get_format()),
         }
-        ctx['icon_classes'] = 'icon-calendar glyphicon-calendar'
+        ctx['icon_classes'] = 'far fa-calendar-alt'
         return ctx
 
 
@@ -286,3 +287,18 @@ class RemoteSelect(forms.Select):
 
 class MultipleRemoteSelect(RemoteSelect):
     allow_multiple_selected = True
+
+
+class NullBooleanSelect(forms.NullBooleanSelect):
+    """
+    Customised NullBooleanSelect widget that gives the "unknown" choice a more
+    meaningful label than the default of "Unknown".
+    """
+
+    def __init__(self, attrs=None):
+        super().__init__(attrs)
+        self.choices = (
+            ('unknown', _('---------')),
+            ('true', _('Yes')),
+            ('false', _('No')),
+        )

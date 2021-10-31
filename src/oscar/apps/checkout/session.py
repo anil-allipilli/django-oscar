@@ -53,18 +53,18 @@ class CheckoutSessionMixin(object):
         # views.
         self.checkout_session = CheckoutSessionData(request)
 
+        # Check if this view should be skipped
+        try:
+            self.check_skip_conditions(request)
+        except exceptions.PassedSkipCondition as e:
+            return http.HttpResponseRedirect(e.url)
+
         # Enforce any pre-conditions for the view.
         try:
             self.check_pre_conditions(request)
         except exceptions.FailedPreCondition as e:
             for message in e.messages:
                 messages.warning(request, message)
-            return http.HttpResponseRedirect(e.url)
-
-        # Check if this view should be skipped
-        try:
-            self.check_skip_conditions(request)
-        except exceptions.PassedSkipCondition as e:
             return http.HttpResponseRedirect(e.url)
 
         return super().dispatch(
@@ -229,7 +229,6 @@ class CheckoutSessionMixin(object):
         shipping_address = self.get_shipping_address(request.basket)
         shipping_method = self.get_shipping_method(
             request.basket, shipping_address)
-        surcharges = SurchargeApplicator(request).get_applicable_surcharges(basket=request.basket)
         if shipping_method:
             shipping_charge = shipping_method.calculate(request.basket)
         else:
@@ -240,6 +239,10 @@ class CheckoutSessionMixin(object):
                 currency=request.basket.currency, excl_tax=D('0.00'),
                 tax=D('0.00')
             )
+
+        surcharges = SurchargeApplicator(request).get_applicable_surcharges(
+            basket=request.basket, shipping_charge=shipping_charge
+        )
         total = self.get_order_totals(request.basket, shipping_charge, surcharges)
         if total.excl_tax == D('0.00'):
             raise exceptions.PassedSkipCondition(
@@ -282,11 +285,13 @@ class CheckoutSessionMixin(object):
             'payment_kwargs': {}
         }
 
-        surcharges = SurchargeApplicator(self.request, submission).get_applicable_surcharges(self.request.basket)
         if not shipping_method:
-            total = shipping_charge = None
+            total = shipping_charge = surcharges = None
         else:
             shipping_charge = shipping_method.calculate(basket)
+            surcharges = SurchargeApplicator(self.request, submission).get_applicable_surcharges(
+                self.request.basket, shipping_charge=shipping_charge
+            )
             total = self.get_order_totals(
                 basket, shipping_charge=shipping_charge, surcharges=surcharges, **kwargs)
 

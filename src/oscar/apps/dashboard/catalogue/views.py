@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import generic
 from django_tables2 import SingleTableMixin, SingleTableView
 
-from oscar.core.loading import get_classes, get_model
+from oscar.core.loading import get_class, get_classes, get_model
 from oscar.views.generic import ObjectLookupView
 
 (ProductForm,
@@ -53,6 +53,7 @@ ProductTable, CategoryTable, AttributeOptionGroupTable, OptionTable \
                   ('PopUpWindowCreateMixin',
                    'PopUpWindowUpdateMixin',
                    'PopUpWindowDeleteMixin'))
+PartnerProductFilterMixin = get_class('dashboard.catalogue.mixins', 'PartnerProductFilterMixin')
 Product = get_model('catalogue', 'Product')
 Category = get_model('catalogue', 'Category')
 ProductImage = get_model('catalogue', 'ProductImage')
@@ -65,20 +66,7 @@ AttributeOptionGroup = get_model('catalogue', 'AttributeOptionGroup')
 Option = get_model('catalogue', 'Option')
 
 
-def filter_products(queryset, user):
-    """
-    Restrict the queryset to products the given user has access to.
-    A staff user is allowed to access all Products.
-    A non-staff user is only allowed access to a product if they are in at
-    least one stock record's partner user list.
-    """
-    if user.is_staff:
-        return queryset
-
-    return queryset.filter(stockrecords__partner__users__pk=user.pk).distinct()
-
-
-class ProductListView(SingleTableView):
+class ProductListView(PartnerProductFilterMixin, SingleTableView):
 
     """
     Dashboard view of the product list.
@@ -113,12 +101,6 @@ class ProductListView(SingleTableView):
     def get_table_pagination(self, table):
         return dict(per_page=settings.OSCAR_DASHBOARD_ITEMS_PER_PAGE)
 
-    def filter_queryset(self, queryset):
-        """
-        Apply any filters to restrict the products that appear on the list
-        """
-        return filter_products(queryset, self.request.user)
-
     def get_queryset(self):
         """
         Build the queryset for this list
@@ -142,14 +124,15 @@ class ProductListView(SingleTableView):
 
         data = self.form.cleaned_data
 
-        if data.get('upc'):
+        upc = data.get('upc')
+        if upc:
             # Filter the queryset by upc
             # For usability reasons, we first look at exact matches and only return
             # them if there are any. Otherwise we return all results
             # that contain the UPC.
 
             # Look up all matches (child products, products not allowed to access) ...
-            matches_upc = Product.objects.filter(upc__iexact=data['upc'])
+            matches_upc = Product.objects.filter(Q(upc__iexact=upc) | Q(children__upc__iexact=upc))
 
             # ... and use that to pick all standalone or parent products that the user is
             # allowed to access.
@@ -161,14 +144,15 @@ class ProductListView(SingleTableView):
                 queryset = qs_match
             else:
                 # No direct UPC match. Let's try the same with an icontains search.
-                matches_upc = Product.objects.filter(upc__icontains=data['upc'])
+                matches_upc = Product.objects.filter(Q(upc__icontains=upc) | Q(children__upc__icontains=upc))
                 queryset = queryset.filter(
                     Q(id__in=matches_upc.values('id')) | Q(id__in=matches_upc.values('parent_id')))
 
-        if data.get('title'):
-            queryset = queryset.filter(title__icontains=data['title'])
+        title = data.get('title')
+        if title:
+            queryset = queryset.filter(Q(title__icontains=title) | Q(children__title__icontains=title))
 
-        return queryset
+        return queryset.distinct()
 
 
 class ProductCreateRedirectView(generic.RedirectView):
@@ -194,7 +178,7 @@ class ProductCreateRedirectView(generic.RedirectView):
             return self.get_invalid_product_class_url()
 
 
-class ProductCreateUpdateView(generic.UpdateView):
+class ProductCreateUpdateView(PartnerProductFilterMixin, generic.UpdateView):
     """
     Dashboard view that is can both create and update products of all kinds.
     It can be used in three different ways, each of them with a unique URL
@@ -252,7 +236,7 @@ class ProductCreateUpdateView(generic.UpdateView):
         """
         Filter products that the user doesn't have permission to update
         """
-        return filter_products(Product.objects.all(), self.request.user)
+        return self.filter_queryset(Product.objects.all())
 
     def get_object(self, queryset=None):
         """
@@ -451,7 +435,7 @@ class ProductCreateUpdateView(generic.UpdateView):
         return self.get_url_with_querystring(url)
 
 
-class ProductDeleteView(generic.DeleteView):
+class ProductDeleteView(PartnerProductFilterMixin, generic.DeleteView):
     """
     Dashboard view to delete a product. Has special logic for deleting the
     last child product.
@@ -465,7 +449,7 @@ class ProductDeleteView(generic.DeleteView):
         """
         Filter products that the user doesn't have permission to update
         """
-        return filter_products(Product.objects.all(), self.request.user)
+        return self.filter_queryset(Product.objects.all())
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -628,6 +612,9 @@ class CategoryUpdateView(CategoryListMixin, generic.UpdateView):
 
     def get_success_url(self):
         messages.info(self.request, _("Category updated successfully"))
+        action = self.request.POST.get('action')
+        if action == 'continue':
+            return reverse('dashboard:catalogue-category-update', kwargs={"pk": self.object.id})
         return super().get_success_url()
 
 
